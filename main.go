@@ -2,38 +2,44 @@ package main
 
 import (
 	"fmt"
-	"github.com/gorilla/mux"
 	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
+func forceHTMLMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		h.ServeHTTP(w, r)
+	})
+}
+
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, "<h1> 欢迎来到 go blog！</h1>")
 }
 
 func aboutHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, "此博客是用以记录编程笔记，如您有反馈或建议，请联系 "+
 		"<a href=\"mailto:summer@example.com\">summer@example.com</a>")
 }
 
-func notFoundHandler(w http.ResponseWriter, r *http.Request)  {
+func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 	fmt.Fprint(w, "<h1>请求页面未找到 :(</h1>"+
 		"<p>如有疑惑，请联系我们。</p>")
 }
 
-func articlesShowHandler(w http.ResponseWriter, r *http.Request)  {
+func articlesShowHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
-	fmt.Fprint(w, "文章 ID" + id)
+	fmt.Fprint(w, "文章 ID"+id)
 }
 
-func articlesIndexHandler(w http.ResponseWriter, r *http.Request)  {
+func articlesIndexHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "访问文章列表")
 }
 
-func articlesStoreHandler(w http.ResponseWriter, r *http.Request)  {
+func articlesStoreHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "创建新的文章")
 }
 
@@ -51,6 +57,9 @@ func main() {
 
 	// 自定义 404 页面
 	router.NotFoundHandler = http.HandlerFunc(notFoundHandler)
+
+	// 使用中间件
+	router.Use(forceHTMLMiddleware)
 
 	// 通过命名路由获取 URL 示例
 	homeURL, _ := router.Get("home").URL()
