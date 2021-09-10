@@ -94,6 +94,7 @@ func aboutHandler(w http.ResponseWriter, r *http.Request) {
 
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
+
 	fmt.Fprint(w, "<h1>请求页面未找到 :(</h1>"+
 		"<p>如有疑惑，请联系我们。</p>")
 }
@@ -119,15 +120,46 @@ func articlesShowHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "500 服务器内部错误")
 		}
 	} else {
-		// 读取成功
-		tmpl, err := template.ParseFiles("resources/views/articles/show.gohtml")
+		// 4. 读取成功，显示文章
+		tmpl, err := template.New("show.gohtml").
+			Funcs(template.FuncMap{
+				"RouteName2URL": RouteName2URL,
+				"Int64ToString": Int64ToString,
+			}).
+			ParseFiles("resources/views/articles/show.gohtml")
 		checkError(err)
 		tmpl.Execute(w, article)
 	}
 }
 
 func articlesIndexHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "访问文章列表")
+
+	// 执行查询语句，返回一个结果集
+	rows, err := db.Query("select * from articles")
+	checkError(err)
+	defer rows.Close()
+
+	var articles []Article
+
+	// 循环读取结果
+	for rows.Next() {
+		var article Article
+		// 扫描每一行的结果并赋值到一个 article 对象中
+		err := rows.Scan(&article.ID, &article.Title, &article.Body)
+		checkError(err)
+		// 将 article 追加到 articles 的这个数组中
+		articles = append(articles, article)
+	}
+
+	// 检测遍历时是否发生错误
+	err = rows.Err()
+	checkError(err)
+
+	// 加载模板
+	tmpl, err := template.ParseFiles("resources/views/articles/index.gohtml")
+	checkError(err)
+
+	tmpl.Execute(w, articles)
 }
 
 func articlesStoreHandler(w http.ResponseWriter, r *http.Request) {
@@ -331,6 +363,53 @@ func articlesUpdateHandler(w http.ResponseWriter, r *http.Request)  {
 	}
 }
 
+func articlesDeleteHandler(w http.ResponseWriter, r *http.Request)  {
+
+	// 获取URL参数
+	id := getRouteVariable("id", r)
+
+	// 读取对应的文章数据
+	article, err := getArticleByID(id)
+
+	// 如果出现错误
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// 数据未找到
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "404 数据未找到")
+		} else {
+			// 数据错误
+			checkError(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "500 服务器错误")
+		}
+	} else {
+		// 未出现错误
+		rowsAffected, err := article.Delete()
+
+		// 发生错误
+		if err != nil {
+			// 应该是 sql 报错了
+			checkError(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "500 服务器错误")
+		} else {
+			// 未发生错误
+			if rowsAffected > 0 {
+				// 重定向到文章列表
+				indexURL, _ := router.Get("articles.index").URL()
+				http.Redirect(w, r, indexURL.String(), http.StatusFound)
+			} else {
+				// 文章未找到
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprintf(w, "404 文章未找到")
+			}
+		}
+	}
+
+
+}
+
 func getRouteVariable(parameterName string, r *http.Request) string {
 	vars := mux.Vars(r)
 	return vars[parameterName]
@@ -363,6 +442,46 @@ func validateArticleFormData(title string, body string) map[string]string  {
 	return errors
 }
 
+func (a Article) Link() string  {
+	showURL, err := router.Get("articles.show").URL("id", strconv.FormatInt(a.ID, 10))
+	if err != nil {
+		checkError(err)
+		return ""
+	}
+	return showURL.String()
+}
+
+func (a Article) Delete() (rowsAffected int64, err error)  {
+	rs, err := db.Exec("DELETE FROM articles WHERE id = " + strconv.FormatInt(a.ID, 10))
+
+	if err != nil {
+		return 0, err
+	}
+
+	// 删除成功，跳转到文章详情页
+	if n, _ := rs.RowsAffected(); n > 0 {
+		return n, nil
+	}
+
+	return 0, err
+}
+
+// RouteName2URL 通过路由名称来获取 URL
+func RouteName2URL(routeName string, pairs ...string) string {
+	url, err := router.Get(routeName).URL(pairs...)
+	if err != nil {
+		checkError(err)
+		return ""
+	}
+
+	return url.String()
+}
+
+// Int64ToString 将 int64 转换为 string
+func Int64ToString(num int64) string {
+	return strconv.FormatInt(num, 10)
+}
+
 func main() {
 	initDB()
 	createTables()
@@ -381,6 +500,8 @@ func main() {
 		articlesEditHandler).Methods("GET").Name("articles.edit")
 	router.HandleFunc("/articles/{id:[0-9]+}",
 		articlesUpdateHandler).Methods("POST").Name("articles.update")
+	router.HandleFunc("/articles/{id:[0-9]+}/delete",
+		articlesDeleteHandler).Methods("POST").Name("articles.delete")
 
 	// 自定义 404 页面
 	router.NotFoundHandler = http.HandlerFunc(notFoundHandler)
