@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"github.com/go-sql-driver/mysql"
+	"goblog/pck/database"
 	"goblog/pck/logger"
 	"goblog/pck/route"
 	"goblog/pck/types"
@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -21,43 +20,6 @@ import (
 
 var router *mux.Router
 var db *sql.DB
-
-func initDB() {
-	var err error
-	config := mysql.Config{
-		User:                 "root",
-		Passwd:               "root",
-		Addr:                 "127.0.0.1:3306",
-		Net:                  "tcp",
-		DBName:               "goblog",
-		AllowNativePasswords: true,
-	}
-
-	// 准备数据库连接池
-	db, err = sql.Open("mysql", config.FormatDSN())
-	logger.LogError(err)
-
-	// 设置最大连接数
-	db.SetMaxOpenConns(25)
-	// 设置最大空闲连接数
-	db.SetMaxIdleConns(25)
-	// 设置每个链接的过期时间
-	db.SetConnMaxLifetime(5 * time.Minute)
-
-	// 尝试连接，失败会报错
-	err = db.Ping()
-	logger.LogError(err)
-}
-
-func createTables() {
-	createArticlesSQL := `CREATE TABLE IF NOT EXISTS articles(
-    id bigint(20) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-    title varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-    body longtext COLLATE utf8mb4_unicode_ci
-); `
-	_, err := db.Exec(createArticlesSQL)
-	logger.LogError(err)
-}
 
 // ArticlesFormData 创建博文表单数据
 type ArticlesFormData struct {
@@ -460,14 +422,12 @@ func (a Article) Delete() (rowsAffected int64, err error)  {
 }
 
 func main() {
-	initDB()
-	createTables()
+	database.Initialize()
+	db = database.DB
 
 	route.Initialize()
 	router = route.Router
 
-	router.HandleFunc("/", homeHandler).Methods("GET").Name("home")
-	router.HandleFunc("/about", aboutHandler).Methods("GET").Name("about")
 	router.HandleFunc("/articles/{id:[0-9]+}",
 		articlesShowHandler).Methods("GET").Name("articles.show")
 	router.HandleFunc("/articles",
@@ -482,9 +442,6 @@ func main() {
 		articlesUpdateHandler).Methods("POST").Name("articles.update")
 	router.HandleFunc("/articles/{id:[0-9]+}/delete",
 		articlesDeleteHandler).Methods("POST").Name("articles.delete")
-
-	// 自定义 404 页面
-	router.NotFoundHandler = http.HandlerFunc(notFoundHandler)
 
 	// 中间件：强制内容类型为 HTML
 	router.Use(forceHTMLMiddleware)
