@@ -40,36 +40,6 @@ func forceHTMLMiddleware(h http.Handler) http.Handler {
 	})
 }
 
-func articlesIndexHandler(w http.ResponseWriter, r *http.Request) {
-
-	// 执行查询语句，返回一个结果集
-	rows, err := db.Query("select * from articles")
-	logger.LogError(err)
-	defer rows.Close()
-
-	var articles []Article
-
-	// 循环读取结果
-	for rows.Next() {
-		var article Article
-		// 扫描每一行的结果并赋值到一个 article 对象中
-		err := rows.Scan(&article.ID, &article.Title, &article.Body)
-		logger.LogError(err)
-		// 将 article 追加到 articles 的这个数组中
-		articles = append(articles, article)
-	}
-
-	// 检测遍历时是否发生错误
-	err = rows.Err()
-	logger.LogError(err)
-
-	// 加载模板
-	tmpl, err := template.ParseFiles("resources/views/articles/index.gohtml")
-	logger.LogError(err)
-
-	tmpl.Execute(w, articles)
-}
-
 func articlesStoreHandler(w http.ResponseWriter, r *http.Request) {
 
 	title := r.FormValue("title")
@@ -318,8 +288,6 @@ func articlesDeleteHandler(w http.ResponseWriter, r *http.Request)  {
 
 }
 
-
-
 func getArticleByID(id string) (Article, error)  {
 	article := Article{}
 	query := "SELECT * FROM articles WHERE id = ?"
@@ -347,14 +315,6 @@ func validateArticleFormData(title string, body string) map[string]string  {
 	return errors
 }
 
-func (a Article) Link() string  {
-	showURL, err := router.Get("articles.show").URL("id", strconv.FormatInt(a.ID, 10))
-	if err != nil {
-		logger.LogError(err)
-		return ""
-	}
-	return showURL.String()
-}
 
 func (a Article) Delete() (rowsAffected int64, err error)  {
 	rs, err := db.Exec("DELETE FROM articles WHERE id = " + strconv.FormatInt(a.ID, 10))
@@ -383,8 +343,6 @@ func main() {
 	bootstrap.SetupDB()
 	router = bootstrap.SetupRoute()
 
-	router.HandleFunc("/articles",
-		articlesIndexHandler).Methods("GET").Name("articles.index")
 	router.HandleFunc("/articles",
 		articlesStoreHandler).Methods("POST").Name("articles.store")
 	router.HandleFunc("/articles/create",
