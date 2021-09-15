@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"database/sql"
 	"fmt"
 	"goblog/app/models/article"
 	"goblog/pck/logger"
@@ -131,6 +132,145 @@ func (*ArticlesController) Create(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, data)
 }
 
+func (*ArticlesController) Edit(w http.ResponseWriter, r *http.Request) {
+	// 获取 URL 参数
+	id := route.GetRouteVariable("id", r)
+
+	// 读取相应的文章数据
+	article, err := article.Get(id)
+
+	// 如果出现错误
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// 数据未找到
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "404 文章未找到")
+		} else {
+			// 数据库错误
+			logger.LogError(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "500 服务器内部错误")
+		}
+	} else {
+		// 读取成功，显示表单
+		updateURL := route.Name2URL("articles.update", "id", id)
+		data := ArticlesFormData{
+			Title: article.Title,
+			Body: article.Body,
+			URL: updateURL,
+			Errors: nil,
+		}
+		tmpl, err := template.ParseFiles("resources/views/articles/edit.gohtml")
+		logger.LogError(err)
+
+		tmpl.Execute(w, data)
+	}
+}
+
+func (*ArticlesController) Update(w http.ResponseWriter, r *http.Request) {
+
+	id := route.GetRouteVariable("id", r)
+
+	_article, err := article.Get(id)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// 数据未找到
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "404 数据未找到")
+		} else {
+			// 数据库错误
+			logger.LogError(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "500 服务器错误")
+		}
+	} else {
+		// 未出现错误
+
+		// 表单验证
+		title := r.PostFormValue("title")
+		body := r.PostFormValue("body")
+
+		errors := validateArticleFormData(title, body)
+
+		if len(errors) == 0 {
+			// 表单验证通过，更新数据
+			_article.Title = title
+			_article.Body = body
+
+			rowsAffected, err := _article.Update()
+
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, "500 服务器内部错误")
+			}
+
+			// 更新成功，跳转到文章详情页
+			if rowsAffected > 0 {
+				showURL := route.Name2URL("articles.show", "id", id)
+				http.Redirect(w, r, showURL, http.StatusFound)
+			} else {
+				fmt.Fprintf(w, "您没有做任何更改！")
+			}
+		} else {
+			// 表单验证不通过
+			updateURL := route.Name2URL("articles.update", "id", id)
+			data := ArticlesFormData{
+				Title: title,
+				Body: body,
+				URL: updateURL,
+				Errors: errors,
+			}
+			tmpl, err := template.ParseFiles("resources/views/articles/edit.gohtml")
+			logger.LogError(err)
+
+			tmpl.Execute(w, data)
+		}
+	}
+}
+
+func (*ArticlesController) Delete(w http.ResponseWriter, r *http.Request) {
+	// 获取URL参数
+	id := route.GetRouteVariable("id", r)
+
+	// 读取对应的文章数据
+	_article, err := article.Get(id)
+
+	// 如果出现错误
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// 数据未找到
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "404 数据未找到")
+		} else {
+			// 数据错误
+			logger.LogError(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "500 服务器错误")
+		}
+	} else {
+		// 未出现错误
+		rowsAffected, err := _article.Delete()
+
+		// 发生错误
+		if err != nil {
+			// 应该是 sql 报错了
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "500 服务器错误")
+		} else {
+			// 未发生错误
+			if rowsAffected > 0 {
+				// 重定向到文章列表
+				indexURL := route.Name2URL("articles.index")
+				http.Redirect(w, r, indexURL, http.StatusFound)
+			} else {
+				// 文章未找到
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprintf(w, "404 文章未找到")
+			}
+		}
+	}
+}
 
 func validateArticleFormData(title string, body string) map[string]string  {
 	errors := make(map[string]string)
