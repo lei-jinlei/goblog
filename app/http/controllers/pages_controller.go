@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"goblog/pck/view"
 	"net/http"
 )
 
@@ -11,7 +12,7 @@ type PagesController struct {
 
 // Home 首页
 func (*PagesController) Home(w http.ResponseWriter, r *http.Request)  {
-	fmt.Fprint(w, "<h1>欢迎来到 go blog</h1>")
+	view.Render(w, nil, "pages.index")
 }
 
 // About 关于我们页面
