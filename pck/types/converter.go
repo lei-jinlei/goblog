@@ -16,3 +16,7 @@ func StringToInt(str string) int {
 	}
 	return i
 }
+
+func Unit64ToString(num uint64) string {
+	return strconv.FormatUint(num, 10)
+}
