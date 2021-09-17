@@ -37,7 +37,9 @@ func (*ArticlesController) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// 读取成功
-		view.Render(w, article, "articles.show")
+		view.Render(w, view.D{
+			"Article": article,
+		}, "articles.show")
 	}
 }
 
@@ -53,7 +55,9 @@ func (*ArticlesController) Index(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "500服务器错误")
 	} else {
 		// 读取成功
-		view.Render(w, articles,"articles.index")
+		view.Render(w, view.D{
+			"Articles": articles,
+		},"articles.index")
 	}
 }
 
